@@ -216,10 +216,9 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
      * and scrolling are handled locally either way.
      */
     /// How many rows a finger must drag to send one mouse wheel report to an application
-    /// that tracks the mouse. Applications scroll several lines per wheel notch (3 in vim,
-    /// less and tmux, 10 in htop), so one report per row makes a drag overshoot to the top
-    /// or bottom. Cursor-key scrolling (Alternate Scroll Mode) is always one key per row.
-    public var touchRowsPerWheelNotch: CGFloat = 3
+    /// that tracks the mouse. The default of 1 matches Termux: one wheel report per row.
+    /// Cursor-key scrolling (Alternate Scroll Mode) is always one key per row.
+    public var touchRowsPerWheelNotch: CGFloat = 1
 
     public var allowMouseReporting: Bool = true {
         didSet {
