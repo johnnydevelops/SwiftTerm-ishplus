@@ -2,16 +2,15 @@ import Testing
 @testable import SwiftTerm
 
 struct TerminalTapPolicyTests {
-    /// Double tap selects a word even when the application is capturing the mouse: the regression
-    /// that prevented any selection inside a TUI (vim, htop, a full-screen app).
-    @Test func doubleTapSelectsWordRegardlessOfMouseReporting() {
-        #expect(TerminalTapPolicy.action(tapCount: 2, hasActiveSelection: false, mouseReportingActive: true) == .selectWord)
-        #expect(TerminalTapPolicy.action(tapCount: 2, hasActiveSelection: false, mouseReportingActive: false) == .selectWord)
+    /// Double and triple taps are multi-clicks for a mouse-tracking application (vim, mc);
+    /// local selection uses the long press there instead.
+    @Test func multiTapsForwardToMouseTrackingApplications() {
+        #expect(TerminalTapPolicy.action(tapCount: 2, hasActiveSelection: false, mouseReportingActive: true) == .forwardClick)
+        #expect(TerminalTapPolicy.action(tapCount: 3, hasActiveSelection: false, mouseReportingActive: true) == .forwardClick)
     }
 
-    /// Triple tap selects a line even under mouse reporting (same rationale as double tap).
-    @Test func tripleTapSelectsLineRegardlessOfMouseReporting() {
-        #expect(TerminalTapPolicy.action(tapCount: 3, hasActiveSelection: false, mouseReportingActive: true) == .selectLine)
+    @Test func multiTapsSelectWithoutMouseReporting() {
+        #expect(TerminalTapPolicy.action(tapCount: 2, hasActiveSelection: false, mouseReportingActive: false) == .selectWord)
         #expect(TerminalTapPolicy.action(tapCount: 3, hasActiveSelection: false, mouseReportingActive: false) == .selectLine)
     }
 

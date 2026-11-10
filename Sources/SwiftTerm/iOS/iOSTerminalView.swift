@@ -269,6 +269,11 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     /// State for `pointerButtonHandler` (iOSPointerButtons.swift)
     var pointerButtonPressed = 0
     var pointerLastReportedCell: Position?
+    /// Single/double/triple tap recognizers for local selection. They wait for each other,
+    /// which delays a tap by the double-tap interval, so they are disabled while an
+    /// application tracks the mouse and `mouseTapGesture` reports taps immediately instead.
+    var localTapGestures: [UIGestureRecognizer] = []
+    var mouseTapGesture: UITapGestureRecognizer?
     private var didFinishSetup = false
     private enum UIShutdownState {
         case active
@@ -841,6 +846,12 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     {
          if gestureRecognizer.state == .began {
              let _ = self.becomeFirstResponder()
+             // Double and triple taps go to a mouse-tracking application, so a long press is
+             // how text gets selected there.
+             if pointerReportingActive(modifiers: gestureRecognizer.modifierFlags) {
+                 selectWord(at: calculateTapHit(gesture: gestureRecognizer).grid)
+                 return
+             }
              let tapLocation = gestureRecognizer.location(in: gestureRecognizer.view)
              let tapRegion = makeContextMenuRegionForTap (point: tapLocation)
              
@@ -1125,16 +1136,37 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
             return
         }
 
-        if tapAction(tapCount: 2, gestureRecognizer: gestureRecognizer) == .selectWord {
-            let hit = calculateTapHit(gesture: gestureRecognizer).grid
-            withTerminal { terminal in
-                selection.selectWordOrExpression(at: hit, in: terminal.displayBuffer)
-                selection.selectionMode = .character
-            }
-            enableSelectionPanGesture()
-            showContextMenu (forRegion: makeContextMenuRegionForSelection(), pos: hit)
-            frameDriver.markDirty()
+        switch tapAction(tapCount: 2, gestureRecognizer: gestureRecognizer) {
+        case .selectWord:
+            selectWord(at: calculateTapHit(gesture: gestureRecognizer).grid)
+        case .forwardClick:
+            forwardClicks(2, gestureRecognizer: gestureRecognizer)
+        default:
+            break
         }
+    }
+
+    func selectWord(at hit: Position) {
+        withTerminal { terminal in
+            selection.selectWordOrExpression(at: hit, in: terminal.displayBuffer)
+            selection.selectionMode = .character
+        }
+        enableSelectionPanGesture()
+        showContextMenu (forRegion: makeContextMenuRegionForSelection(), pos: hit)
+        frameDriver.markDirty()
+    }
+
+    /// Reports `count` complete clicks in a row; xterm applications detect double and triple
+    /// clicks from the timing of consecutive presses.
+    func forwardClicks(_ count: Int, gestureRecognizer: UIGestureRecognizer) {
+        let sendsRelease = withTerminal { $0.mouseMode.sendButtonRelease() }
+        for _ in 0..<count {
+            sharedMouseEvent(gestureRecognizer: gestureRecognizer, release: false)
+            if sendsRelease {
+                sharedMouseEvent(gestureRecognizer: gestureRecognizer, release: true)
+            }
+        }
+        frameDriver.markDirty()
     }
 
     @objc func tripleTap (_ gestureRecognizer: UITapGestureRecognizer)
@@ -1145,12 +1177,17 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
             return
         }
 
-        if tapAction(tapCount: 3, gestureRecognizer: gestureRecognizer) == .selectLine {
+        switch tapAction(tapCount: 3, gestureRecognizer: gestureRecognizer) {
+        case .selectLine:
             let hit = calculateTapHit(gesture: gestureRecognizer).grid
             withTerminal { _ in selection.select(row: hit.row) }
             enableSelectionPanGesture()
             showContextMenu (forRegion: makeContextMenuRegionForSelection(), pos: hit)
             frameDriver.markDirty()
+        case .forwardClick:
+            forwardClicks(3, gestureRecognizer: gestureRecognizer)
+        default:
+            break
         }
     }
     
@@ -1529,6 +1566,7 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
 
         singleTap.require(toFail: doubleTap)
         doubleTap.require(toFail: tripleTap)
+        localTapGestures = [singleTap, doubleTap, tripleTap]
 
         setupPointerButtonGestures()
     }
@@ -3819,6 +3857,7 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         } else {
             disableMousePanGesture()
         }
+        refreshMouseTapGestures(mouseMode: mouseMode)
     }
     
     nonisolated open func setTerminalTitle(source: Terminal, title: String) {

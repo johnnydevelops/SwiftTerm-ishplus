@@ -44,9 +44,11 @@ enum TerminalTapPolicy {
     static func action(tapCount: Int, hasActiveSelection: Bool, mouseReportingActive: Bool) -> TerminalTapAction {
         switch tapCount {
         case 3:
-            return .selectLine
+            // A tracking application owns multi-clicks (double-click to select a word in vim,
+            // open a directory in mc). Local selection moves to the long press instead.
+            return mouseReportingActive ? .forwardClick : .selectLine
         case 2:
-            return .selectWord
+            return mouseReportingActive ? .forwardClick : .selectWord
         default:
             if hasActiveSelection && mouseReportingActive {
                 return .dismissSelection

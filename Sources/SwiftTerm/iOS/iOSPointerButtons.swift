@@ -88,6 +88,43 @@ extension TerminalView {
         twoFingerTap.numberOfTouchesRequired = 2
         twoFingerTap.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
         addGestureRecognizer(twoFingerTap)
+
+        // While an application tracks the mouse every tap is a click, reported without
+        // waiting to see whether a double tap follows (the application times multi-clicks).
+        let mouseTap = UITapGestureRecognizer(target: self, action: #selector(mouseTapHandler(_:)))
+        mouseTap.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue),
+                                      NSNumber(value: UITouch.TouchType.pencil.rawValue)]
+        mouseTap.isEnabled = false
+        addGestureRecognizer(mouseTap)
+        mouseTapGesture = mouseTap
+    }
+
+    func refreshMouseTapGestures(mouseMode: Terminal.MouseMode? = nil) {
+        let mode = mouseMode ?? withTerminal { $0.mouseMode }
+        let tracking = allowMouseReporting && mode.sendButtonPress()
+        mouseTapGesture?.isEnabled = tracking
+        for gesture in localTapGestures {
+            gesture.isEnabled = !tracking
+        }
+    }
+
+    @objc func mouseTapHandler(_ gesture: UITapGestureRecognizer) {
+        guard gesture.state == .ended else { return }
+        let hadSelection = withTerminal { _ in selection.active }
+        if hadSelection {
+            // First tap after a long-press selection just clears it.
+            withTerminal { _ in selection.selectNone() }
+            disableSelectionPanGesture()
+            frameDriver.markDirty()
+            return
+        }
+        let modifiers = gesture.modifierFlags
+        guard pointerReportingActive(modifiers: modifiers) else { return }
+        let point = gesture.location(in: self)
+        reportPointer(button: 0, release: false, motion: false, at: point, modifiers: modifiers)
+        if withTerminal({ $0.mouseMode.sendButtonRelease() }) {
+            reportPointer(button: 0, release: true, motion: false, at: point, modifiers: modifiers)
+        }
     }
 
     func pointerReportingActive(modifiers: UIKeyModifierFlags) -> Bool {
