@@ -2384,8 +2384,23 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         lastLayoutBounds = currentBounds
     }
 
+    /// Scroll through the history a whole row at a time, like Termux, rather
+    /// than showing partial rows while dragging or decelerating.
+    public var snapsScrollingToRows = true
+
     open override var contentOffset: CGPoint {
         didSet {
+            if snapsScrollingToRows, isTracking || isDecelerating, cellDimension.height > 0 {
+                let maxY = maxContentOffsetY()
+                // Leave the rubber-band bounce past either end alone
+                if contentOffset.y > 0 && contentOffset.y < maxY {
+                    let snapped = min(maxY, (contentOffset.y / cellDimension.height).rounded() * cellDimension.height)
+                    if abs(snapped - contentOffset.y) > 0.01 {
+                        contentOffset = CGPoint(x: contentOffset.x, y: snapped)
+                        return
+                    }
+                }
+            }
             syncYDispFromContentOffset()
             // Core Graphics also draws from a copied viewport snapshot.
             // A scroll must refresh that snapshot before the next draw.
