@@ -215,6 +215,12 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
      * If the application has not requested mouse events this setting changes nothing: selection
      * and scrolling are handled locally either way.
      */
+    /// How many rows a finger must drag to send one mouse wheel report to an application
+    /// that tracks the mouse. Applications scroll several lines per wheel notch (3 in vim,
+    /// less and tmux, 10 in htop), so one report per row makes a drag overshoot to the top
+    /// or bottom. Cursor-key scrolling (Alternate Scroll Mode) is always one key per row.
+    public var touchRowsPerWheelNotch: CGFloat = 3
+
     public var allowMouseReporting: Bool = true {
         didSet {
             guard allowMouseReporting != oldValue, terminal != nil else { return }
@@ -1300,7 +1306,8 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         forwardWheel(distance: distance,
                      point: gestureRecognizer.location(in: self),
                      modifiers: gestureRecognizer.modifierFlags,
-                     accumulator: &wheelDragAccumulator)
+                     accumulator: &wheelDragAccumulator,
+                     rowsPerWheelNotch: max(1, touchRowsPerWheelNotch))
     }
 
     /// Pointer travel is separate from finger travel. Positive pan translation moves up.
@@ -1318,7 +1325,8 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         point: CGPoint,
         modifiers: UIKeyModifierFlags,
         accumulator: inout WheelDistanceAccumulator<ProgramScrollRoute>,
-        isPrecise: Bool = true
+        isPrecise: Bool = true,
+        rowsPerWheelNotch: CGFloat = 1
     ) {
         let cellHeight = cellDimension.height
         guard cellHeight > 0 else { return }
@@ -1339,8 +1347,9 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
 
             let lines: Int
             if isPrecise {
+                let unit = route == .mouse ? cellHeight * rowsPerWheelNotch : cellHeight
                 lines = accumulator.takeWholeLines(
-                    distance: distance, cellHeight: cellHeight, route: route)
+                    distance: distance, cellHeight: unit, route: route)
             } else {
                 accumulator.reset()
                 lines = distance == 0 ? 0 : (distance > 0 ? 1 : -1)
