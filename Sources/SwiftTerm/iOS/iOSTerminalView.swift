@@ -106,6 +106,8 @@ public extension Notification.Name {
  * output and ``send(data:)`` for user input. Use ``pasteText(_:)`` for text
  * paste. See <doc:MigratingFrom1To2> for the complete access map.
  */
+// Explicit Objective-C name so hosts with their own TerminalView class can import SwiftTerm.
+@objc(SwiftTermTerminalView)
 open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollViewDelegate, TerminalDelegate, UIPointerInteractionDelegate {
     let coreGraphicsRenderCache = CoreGraphicsRenderCache()
     let frameCaptureCache = FrameCaptureCache()
@@ -264,6 +266,9 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     private var activeCommandKeys: Set<UIKeyboardHIDUsage> = []
     private var pointerInteraction: UIPointerInteraction?
     private var hoverGesture: UIHoverGestureRecognizer?
+    /// State for `pointerButtonHandler` (iOSPointerButtons.swift)
+    var pointerButtonPressed = 0
+    var pointerLastReportedCell: Position?
     private var didFinishSetup = false
     private enum UIShutdownState {
         case active
@@ -1524,6 +1529,8 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
 
         singleTap.require(toFail: doubleTap)
         doubleTap.require(toFail: tripleTap)
+
+        setupPointerButtonGestures()
     }
 
     func setupLinkReportingInteractions ()
