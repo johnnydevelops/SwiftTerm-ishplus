@@ -4820,6 +4820,11 @@ open class Terminal {
                 buffer.linesTop = 0
                 buffer.yBase = max (buffer.yBase - scrollBackSize, 0)
                 buffer.yDisp = max (buffer.yDisp - scrollBackSize, 0)
+                // The view sizes its scrolling to the lines and yDisp: without
+                // this it kept the old size and position, showing empty space
+                // below the screen (clear(1) sends ESC[3J)
+                recordScrollNotification()
+                updateFullScreen()
             }
             break;
         default:
